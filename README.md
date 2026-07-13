@@ -1,4 +1,4 @@
-# DiDi 🌿 — Diseño del MVP viral
+# DiDi o NO — Diseño del MVP viral
 
 > Documentación de diseño de producto (no es implementación). Cubre los 7 entregables pedidos.
 > El nombre del repo es interno; la app pública **no** debe marcarse ni nombrar plataformas reales de transporte (riesgo legal/imagen). El diseño es deliberadamente genérico y no acusatorio.
