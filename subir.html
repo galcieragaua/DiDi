@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="color-scheme" content="light dark" />
+<title>Subir una foto — ¿DRIVER o NO?</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <a href="index.html"><h1>DRIVER</h1></a>
+      <div class="tag">subir una foto</div>
+    </div>
+    <a href="index.html" class="btn" style="padding:8px 11px">Volver</a>
+  </header>
+
+  <div class="steps">
+    <div class="step on" data-s="1"></div><div class="step" data-s="2"></div>
+    <div class="step" data-s="3"></div><div class="step" data-s="4"></div>
+  </div>
+
+  <!-- 1. foto del auto -->
+  <section class="pane on" id="p1">
+    <h2>La foto del auto</h2>
+    <p class="lead">Sacada en la calle, de frente, de costado o de atrás — da igual el ángulo.
+    Lo único que importa es que se vea el auto.</p>
+    <label class="drop" for="fCar">
+      <b>Elegir o sacar la foto</b>
+      <span>Se procesa en tu teléfono, no se sube todavía</span>
+    </label>
+    <input type="file" id="fCar" accept="image/*" hidden />
+  </section>
+
+  <!-- 2. tapar patente -->
+  <section class="pane" id="p2">
+    <h2>Tapá la patente</h2>
+    <p class="lead">Arrastrá el dedo formando un recuadro encima de la patente. Podés hacer varios
+    si aparece más de una vez (chapa, vidrio, reflejo).</p>
+    <div class="editor" id="edCar"><canvas id="cvCar"></canvas><div class="marquee" id="mqCar"></div></div>
+    <div class="tools">
+      <button class="btn" id="undoCar" disabled>Deshacer</button>
+      <button class="btn danger" id="clearCar" disabled>Empezar de nuevo</button>
+      <span class="count" id="cntCar">0 zonas tapadas</span>
+    </div>
+    <div class="warn">La imagen original nunca sale de tu teléfono. Lo que se envía es esta versión
+    ya tapada, y el tapado es destructivo: los píxeles se tiran, no se pueden recuperar.</div>
+    <div class="rowbtns">
+      <button class="btn" data-goto="1">Atrás</button>
+      <button class="btn go" id="nextCar" disabled>Seguir</button>
+    </div>
+  </section>
+
+  <!-- 3. verificación (opcional) -->
+  <section class="pane" id="p3">
+    <h2>¿Tenés la prueba?</h2>
+    <p class="lead">Una foto del conductor con la app abierta en el teléfono del dashboard. Esa es la
+    prueba definitiva. Si no la tenés, no pasa nada: la foto entra igual como
+    <b>registro visual</b> y la resuelve el voto de la gente.</p>
+
+    <label class="drop" for="fProof" id="dropProof">
+      <b>Agregar foto de verificación</b>
+      <span>Opcional</span>
+    </label>
+    <input type="file" id="fProof" accept="image/*" hidden />
+
+    <div id="proofEdit" style="display:none">
+      <p class="lead" style="margin:16px 0 10px">Ahora tapá la cara del conductor.</p>
+      <div class="editor" id="edProof"><canvas id="cvProof"></canvas><div class="marquee" id="mqProof"></div></div>
+      <div class="tools">
+        <button class="btn" id="undoProof" disabled>Deshacer</button>
+        <button class="btn danger" id="dropProofBtn">Sacar esta foto</button>
+        <span class="count" id="cntProof">0 zonas tapadas</span>
+      </div>
+    </div>
+
+    <textarea class="note" id="note" placeholder="Algo que quieras aclarar (opcional): barrio, hora, qué te llamó la atención…"></textarea>
+
+    <div class="rowbtns">
+      <button class="btn" data-goto="2">Atrás</button>
+      <button class="btn go" id="nextProof">Seguir</button>
+    </div>
+  </section>
+
+  <!-- 4. enviar -->
+  <section class="pane" id="p4">
+    <h2>Revisá y mandá</h2>
+    <p class="lead">Esto es exactamente lo que se va a enviar. Miralo de cerca: si llegás a leer una
+    patente o reconocer una cara, volvé y tapá mejor.</p>
+    <div id="preview"></div>
+    <div class="rowbtns">
+      <button class="btn" data-goto="3">Atrás</button>
+      <button class="btn go" id="send">Enviar</button>
+    </div>
+    <p class="lead" style="margin-top:16px;font-size:12px">Nada se publica automáticamente: cada foto
+    la revisa una persona antes de entrar al juego.</p>
+  </section>
+
+  <!-- listo -->
+  <section class="pane" id="p5">
+    <div class="done">
+      <div class="big">✓</div>
+      <h2 style="margin-top:0">Enviada</h2>
+      <p class="lead" id="doneMsg">Queda en la fila de revisión.</p>
+      <div class="rowbtns">
+        <a class="btn wide solid" href="index.html" style="text-align:center;text-decoration:none">Volver a jugar</a>
+      </div>
+      <button class="btn wide" id="again" style="margin-top:10px">Subir otra</button>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="sb.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');
+  clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2400);}
+
+function goto(n){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  $('#p'+n).classList.add('on');
+  document.querySelectorAll('.step').forEach(s=>s.classList.toggle('on', +s.dataset.s<=Math.min(n,4)));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* Editor de tapado. Guarda el original intacto y redibuja desde ahí en cada
+   cambio, así "deshacer" es simplemente sacar un rect de la lista. */
+function makeEditor({wrap, canvas, marquee, onChange}){
+  let orig=null, rects=[];
+  const ctx=canvas.getContext('2d');
+
+  function redraw(){
+    if(!orig) return;
+    ctx.drawImage(orig,0,0);
+    rects.forEach(r=>pixelate(canvas,r.x,r.y,r.w,r.h));
+    onChange(rects.length);
+  }
+
+  async function setFile(file){
+    const img=await loadImage(file);
+    orig=fitCanvas(img,1400);
+    canvas.width=orig.width; canvas.height=orig.height;
+    rects=[]; redraw();
+  }
+
+  /* pointer → coordenadas del canvas (el canvas se muestra escalado por CSS) */
+  const toCanvas=e=>{
+    const r=canvas.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*(canvas.width/r.width), y:(e.clientY-r.top)*(canvas.height/r.height)};
+  };
+
+  let start=null;
+  wrap.addEventListener('pointerdown',e=>{
+    if(!orig) return;
+    start=toCanvas(e);
+    try{ wrap.setPointerCapture(e.pointerId); }catch{}
+    marquee.style.display='block'; e.preventDefault();
+  });
+  wrap.addEventListener('pointermove',e=>{
+    if(!start) return;
+    const p=toCanvas(e), r=canvas.getBoundingClientRect(), k=r.width/canvas.width;
+    const x=Math.min(start.x,p.x), y=Math.min(start.y,p.y);
+    marquee.style.left=(x*k)+'px'; marquee.style.top=(y*k)+'px';
+    marquee.style.width=(Math.abs(p.x-start.x)*k)+'px'; marquee.style.height=(Math.abs(p.y-start.y)*k)+'px';
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointerup',e=>{
+    if(!start) return;
+    const p=toCanvas(e);
+    const r={x:Math.min(start.x,p.x), y:Math.min(start.y,p.y),
+             w:Math.abs(p.x-start.x), h:Math.abs(p.y-start.y)};
+    start=null; marquee.style.display='none';
+    if(r.w>8&&r.h>8){ rects.push(r); redraw(); }
+    else toast('Muy chico — arrastrá un recuadro más grande');
+  });
+
+  return {
+    setFile,
+    undo(){ rects.pop(); redraw(); },
+    clear(){ rects=[]; redraw(); },
+    count:()=>rects.length,
+    has:()=>!!orig,
+    blob:(q=.82)=>toJpeg(canvas,q),
+    dataUrl:()=>canvas.toDataURL('image/jpeg',.82)
+  };
+}
+
+const car = makeEditor({
+  wrap:$('#edCar'), canvas:$('#cvCar'), marquee:$('#mqCar'),
+  onChange(n){
+    $('#cntCar').textContent = n + (n===1?' zona tapada':' zonas tapadas');
+    $('#cntCar').classList.toggle('ok', n>0);
+    $('#undoCar').disabled = $('#clearCar').disabled = !n;
+    $('#nextCar').disabled = !n;
+  }
+});
+
+const proof = makeEditor({
+  wrap:$('#edProof'), canvas:$('#cvProof'), marquee:$('#mqProof'),
+  onChange(n){
+    $('#cntProof').textContent = n + (n===1?' zona tapada':' zonas tapadas');
+    $('#cntProof').classList.toggle('ok', n>0);
+    $('#undoProof').disabled = !n;
+  }
+});
+
+$('#fCar').onchange = async e => {
+  const f=e.target.files[0]; if(!f) return;
+  try{ await car.setFile(f); goto(2); }catch(err){ toast(err.message); }
+};
+$('#fProof').onchange = async e => {
+  const f=e.target.files[0]; if(!f) return;
+  try{ await proof.setFile(f); $('#proofEdit').style.display='block'; $('#dropProof').style.display='none'; }
+  catch(err){ toast(err.message); }
+};
+
+$('#undoCar').onclick=()=>car.undo();
+$('#clearCar').onclick=()=>car.clear();
+$('#undoProof').onclick=()=>proof.undo();
+$('#dropProofBtn').onclick=()=>{
+  proof.clear(); $('#proofEdit').style.display='none';
+  $('#dropProof').style.display='block'; $('#fProof').value='';
+};
+$('#nextCar').onclick=()=>goto(3);
+document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>goto(+b.dataset.goto));
+
+$('#nextProof').onclick=()=>{
+  if(proof.has() && proof.count()===0)
+    return toast('Tapá la cara del conductor antes de seguir');
+  const p=$('#preview');
+  p.innerHTML =
+    `<div class="proof"><div class="cap"><span>El auto</span><span>Patente tapada</span></div>
+       <img src="${car.dataUrl()}" style="max-height:none"></div>` +
+    (proof.has()
+      ? `<div class="proof" style="margin-top:12px"><div class="cap"><span>La prueba</span><span>Cara tapada</span></div>
+           <img src="${proof.dataUrl()}" style="max-height:none"></div>`
+      : `<div class="stamp" style="margin-top:14px">Entra como registro visual — sin prueba</div>`);
+  goto(4);
+};
+
+$('#send').onclick = async () => {
+  const b=$('#send'); b.disabled=true; b.textContent='Enviando…';
+  try{
+    const res = await submitRound({
+      carBlob: await car.blob(),
+      proofBlob: proof.has() ? await proof.blob() : null,
+      note: $('#note').value.trim()
+    });
+    $('#doneMsg').textContent = res.remote
+      ? 'Queda en la fila de revisión. Si entra, la vas a ver aparecer en el juego.'
+      : 'Guardada en este dispositivo: el servidor no respondió. Se puede revisar igual desde el panel de admin de esta compu.';
+    goto(5);
+  }catch(err){
+    toast('No pude enviarla: '+err.message);
+  }finally{ b.disabled=false; b.textContent='Enviar'; }
+};
+
+$('#again').onclick=()=>location.reload();
+</script>
+</body>
+</html>

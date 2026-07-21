@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Panel — ¿DRIVER o NO?</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+
+<div class="app" style="max-width:620px">
+
+  <div class="login" id="login">
+    <h1 style="font-size:23px;font-weight:800">DRIVER</h1>
+    <div class="tag" style="font-family:var(--serif);font-style:italic;color:var(--soft);margin-top:5px">panel de moderación</div>
+    <input type="email" id="email" placeholder="tu mail" autocomplete="email" />
+    <button class="btn wide solid" id="sendLink">Mandarme el link de acceso</button>
+    <p class="lead" style="margin-top:16px;font-size:12px">Te llega un mail con un link. No hay contraseña.</p>
+    <p class="lead" style="margin-top:10px;font-size:11.5px" id="localHint"></p>
+  </div>
+
+  <div id="panel" style="display:none">
+    <header>
+      <div class="brand">
+        <a href="index.html"><h1>DRIVER</h1></a>
+        <div class="tag" id="who">panel</div>
+      </div>
+      <button class="btn" id="out" style="padding:8px 11px">Salir</button>
+    </header>
+
+    <div class="tabs">
+      <button class="on" data-tab="pending">Pendientes <span id="nPending"></span></button>
+      <button data-tab="approved">Aprobadas</button>
+      <button data-tab="rejected">Rechazadas</button>
+    </div>
+
+    <div id="list"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="sb.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let tab = 'pending';
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');
+  clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2600);}
+
+const fecha = s => { try { return new Date(s).toLocaleString('es-AR',
+  {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch { return ''; } };
+
+function card(r){
+  const el = document.createElement('div');
+  el.className = 'card';
+  const truthLbl = r.truth === 'driver' ? 'DRIVER' : r.truth === 'no' ? 'NO' : 'registro visual';
+  el.innerHTML = `
+    <div class="hd">
+      <span>#${r.id}${r.local ? ' · local' : ''}</span>
+      <span>${fecha(r.created_at)}${tab !== 'pending' ? ' · ' + truthLbl : ''}</span>
+    </div>
+    <div class="pics">
+      <div class="pic"><img src="${r.car}" alt="Auto propuesto"><span class="lbl">El auto</span></div>
+      ${r.proof
+        ? `<div class="pic"><img src="${r.proof}" alt="Foto de verificación"><span class="lbl">La prueba</span></div>`
+        : `<div class="pic empty">Sin foto<br>de verificación</div>`}
+    </div>
+    ${r.note ? `<div class="hd" style="border-top:1px solid var(--line);border-bottom:0;
+        text-transform:none;letter-spacing:0;font-weight:400;font-family:var(--serif);
+        font-style:italic;font-size:13px;color:var(--ink)">${r.note.replace(/[<>&]/g,'')}</div>` : ''}
+    <div class="acts"></div>`;
+
+  const acts = el.querySelector('.acts');
+  const add = (label, cls, fn) => {
+    const b = document.createElement('button');
+    b.className = 'btn ' + cls; b.textContent = label; b.onclick = fn; acts.appendChild(b);
+  };
+
+  if (tab === 'pending') {
+    add('Aprobar: DRIVER', 'go', () => set(r.id, 'approved', 'driver'));
+    add('Aprobar: NO', 'go', () => set(r.id, 'approved', 'no'));
+    add(r.proof ? 'Aprobar sin veredicto' : 'Aprobar como registro visual', 'full', () => set(r.id, 'approved', null));
+    add('Rechazar', 'danger full', () => set(r.id, 'rejected', null));
+  } else {
+    add('Volver a pendientes', '', () => set(r.id, 'pending', null));
+    add('Borrar', 'danger', () => del(r.id));
+  }
+  return el;
+}
+
+async function set(id, status, truth){
+  try { await adminSet(id, status, truth); toast('Listo'); render(); }
+  catch(e){ toast('No pude guardarlo: ' + e.message); }
+}
+async function del(id){
+  if(!confirm('Borrar esta foto para siempre?')) return;
+  try { await adminDelete(id); toast('Borrada'); render(); }
+  catch(e){ toast('No pude borrarla: ' + e.message); }
+}
+
+async function render(){
+  const list = $('#list'); list.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const rows = await adminList(tab);
+  list.innerHTML = '';
+  if(!rows.length){
+    list.innerHTML = '<div class="empty-state">' + (tab === 'pending'
+      ? 'No hay nada esperando revisión.'
+      : 'Nada acá todavía.') + '</div>';
+  } else rows.forEach(r => list.appendChild(card(r)));
+  if(tab === 'pending') $('#nPending').textContent = rows.length ? '(' + rows.length + ')' : '';
+}
+
+async function boot(){
+  captureToken();
+  const me = await whoami();
+  // sin sesión igual dejo entrar: el modo local guarda las propuestas en este dispositivo
+  const local = await adminList('pending');
+  if(me || local.length){
+    $('#login').style.display = 'none';
+    $('#panel').style.display = 'block';
+    $('#who').textContent = me ? me.email : 'modo local (solo este dispositivo)';
+    render();
+  } else {
+    $('#localHint').textContent = 'Si todavía no configuraste la base, las fotos que subas desde esta compu aparecen acá igual.';
+  }
+}
+
+$('#sendLink').onclick = async () => {
+  const email = $('#email').value.trim();
+  if(!email) return toast('Escribí tu mail');
+  const b = $('#sendLink'); b.disabled = true; b.textContent = 'Mandando…';
+  try { await sendMagicLink(email); toast('Revisá tu correo'); }
+  catch(e){ toast('No salió: ' + e.message); }
+  finally { b.disabled = false; b.textContent = 'Mandarme el link de acceso'; }
+};
+
+$('#out').onclick = () => { localStorage.removeItem('dn_tok'); location.reload(); };
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); tab = b.dataset.tab; render();
+});
+
+boot();
+</script>
+</body>
+</html>
